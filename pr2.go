@@ -1,4 +1,4 @@
-package main
+package pr2
 
 import (
 	"bufio"
@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/gospino/pr2/savegame"
+	"github.com/gospino/pr2/savegame/compression"
 	"log"
 	"os"
-	"pr2-rev/savegame"
-	"pr2-rev/savegame/compression"
 	"runtime/pprof"
 )
 
