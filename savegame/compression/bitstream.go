@@ -6,11 +6,10 @@ import (
 )
 
 type BitStream struct {
-	r                   io.Reader
-	buffer              uint32
-	nextBuffer          uint32
-	numBitsInBuffer     uint32
-	NumProcessedBuffers int
+	r               io.Reader
+	buffer          uint32
+	nextBuffer      uint32
+	numBitsInBuffer uint32
 }
 
 func NewBitStream(r io.Reader) *BitStream {
@@ -26,7 +25,6 @@ func (bs *BitStream) ReadBits(numberOfBits uint32) (uint32, error) {
 		if err != nil {
 			return 0, err
 		}
-		bs.NumProcessedBuffers++
 		res := bs.buffer | (bs.nextBuffer << bs.numBitsInBuffer)
 		res &= (1 << numberOfBits) - 1
 		bs.buffer = bs.nextBuffer >> numMissingBits

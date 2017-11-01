@@ -6,6 +6,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const dictionarySize = 520 // Retrived in process of reverse engineering the game
+
 type decompressedState int
 
 const (
@@ -14,8 +16,8 @@ const (
 )
 
 type Reader struct {
-	Bs                       *BitStream
-	buffer                   CyclicBuffer // cyclic buffer which holds recent 520 bytes to be used while decompressing incrementally
+	bs                       *BitStream
+	buffer                   CyclicBuffer
 	state                    decompressedState
 	numBytesToTakeFromBuffer uint
 	offsetInBuffer           uint
@@ -23,8 +25,8 @@ type Reader struct {
 
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		Bs:     NewBitStream(r),
-		buffer: NewCyclicBuffer(520),
+		bs:     NewBitStream(r),
+		buffer: NewCyclicBuffer(dictionarySize),
 		state:  dsReadFromStream,
 	}
 }
@@ -32,7 +34,7 @@ func NewReader(r io.Reader) *Reader {
 func (d *Reader) Read(b []byte) (num int, err error) {
 	c := len(b)
 	for ; num < c; num++ {
-		bt, err := d.DecompressByte()
+		bt, err := d.decompressByte()
 		if err != nil {
 			if err == io.EOF {
 				return num, err
@@ -45,12 +47,12 @@ func (d *Reader) Read(b []byte) (num int, err error) {
 	return
 }
 
-func (d *Reader) DecompressByte() (b byte, e error) {
+func (d *Reader) decompressByte() (b byte, e error) {
 	switch d.state {
 	case dsReadFromStream:
 
 		// read LZSS codeword flag (1 bit)
-		isInBuffer, err := d.Bs.ReadOneBit()
+		isInBuffer, err := d.bs.ReadOneBit()
 		if err != nil {
 			return 0, err
 		}
@@ -61,14 +63,14 @@ func (d *Reader) DecompressByte() (b byte, e error) {
 
 			// first of all lets decode position in buffer relative to end and
 			// number of bytes to copy
-			shift, err := d.Bs.ReadBits(3)
+			shift, err := d.bs.ReadBits(3)
 			if err != nil {
 				return 0, err
 			}
 
 			shift++
 
-			baseIndex, err := d.Bs.ReadBits(shift)
+			baseIndex, err := d.bs.ReadBits(shift)
 			if err != nil {
 				return 0, err
 			}
@@ -78,7 +80,7 @@ func (d *Reader) DecompressByte() (b byte, e error) {
 			var numBytes uint32 = 2
 
 			for {
-				partial, err := d.Bs.ReadBits(shift)
+				partial, err := d.bs.ReadBits(shift)
 				if err != nil {
 					return 0, err
 				}
@@ -92,10 +94,10 @@ func (d *Reader) DecompressByte() (b byte, e error) {
 			d.numBytesToTakeFromBuffer = uint(numBytes)
 			d.offsetInBuffer = uint(baseIndex) + 1
 			d.state = dsCopyFromBuffer
-			return d.DecompressByte()
+			return d.decompressByte()
 		} else {
 			//read byte in normal way
-			b, err := d.Bs.ReadBits(8)
+			b, err := d.bs.ReadBits(8)
 			if err != nil {
 				return 0, err
 			}

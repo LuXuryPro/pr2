@@ -50,22 +50,22 @@ func (b *CyclicBuffer) GetFromOffset(offset uint) (r byte, err error) {
 	if offset > b.numElements {
 		return 0, errors.Errorf("Attempt to read element outside buffer range: startIndex: %d endIndex: %d numElements: %d in:offset: %d", b.startIndex, b.endIndex, b.numElements, offset)
 	}
-	indexInBuffer := substractModulo(b.startIndex, offset, b.size)
+	indexInBuffer := subtractModulo(b.startIndex, offset, b.size)
 	return b.buffer[indexInBuffer], nil
 }
 
 func (b *CyclicBuffer) String() string {
 	var m []byte
-	i := substractModulo(b.startIndex, 1, b.size)
-	for i != substractModulo(b.endIndex, 1, b.size) {
+	i := subtractModulo(b.startIndex, 1, b.size)
+	for i != subtractModulo(b.endIndex, 1, b.size) {
 		es := b.buffer[i]
 		m = append(m, es)
-		i = substractModulo(i, 1, b.size)
+		i = subtractModulo(i, 1, b.size)
 	}
 	return hex.Dump(m)
 }
 
-func substractModulo(a, b, modulus uint) uint {
+func subtractModulo(a, b, modulus uint) uint {
 	first := a % modulus
 	second := b % modulus
 	return (first - second + modulus) % modulus
