@@ -1,17 +1,22 @@
 package compression
 
-import "errors"
+import (
+	"encoding/hex"
+
+	"github.com/pkg/errors"
+)
 
 var CyclicBufferOverflowError = errors.New("Cyclic Buffer Overflow")
 
 type CyclicBuffer struct {
-	buffer     []byte
-	startIndex int32
-	endIndex   int32
-	size       int32
+	buffer      []byte
+	startIndex  uint
+	endIndex    uint
+	size        uint
+	numElements uint
 }
 
-func NewCyclicBuffer(size int32) CyclicBuffer {
+func NewCyclicBuffer(size uint) CyclicBuffer {
 	return CyclicBuffer{
 		buffer: make([]byte, size),
 		size:   size,
@@ -22,6 +27,12 @@ func (b *CyclicBuffer) WriteFront(val byte) {
 	b.buffer[b.startIndex] = val
 	b.startIndex += 1
 	b.startIndex %= b.size
+
+	if b.startIndex == b.endIndex {
+		b.endIndex++
+		b.endIndex %= b.size
+	}
+	b.numElements++
 }
 
 func (b *CyclicBuffer) ReadBack() (r byte, err error) {
@@ -31,5 +42,31 @@ func (b *CyclicBuffer) ReadBack() (r byte, err error) {
 	r = b.buffer[b.endIndex]
 	b.endIndex += 1
 	b.endIndex %= b.size
+	b.numElements--
 	return
+}
+
+func (b *CyclicBuffer) GetFromOffset(offset uint) (r byte, err error) {
+	if offset > b.numElements {
+		return 0, errors.Errorf("Attempt to read element outside buffer range: startIndex: %d endIndex: %d numElements: %d in:offset: %d", b.startIndex, b.endIndex, b.numElements, offset)
+	}
+	indexInBuffer := substractModulo(b.startIndex, offset, b.size)
+	return b.buffer[indexInBuffer], nil
+}
+
+func (b *CyclicBuffer) String() string {
+	var m []byte
+	i := substractModulo(b.startIndex, 1, b.size)
+	for i != substractModulo(b.endIndex, 1, b.size) {
+		es := b.buffer[i]
+		m = append(m, es)
+		i = substractModulo(i, 1, b.size)
+	}
+	return hex.Dump(m)
+}
+
+func substractModulo(a, b, modulus uint) uint {
+	first := a % modulus
+	second := b % modulus
+	return (first - second + modulus) % modulus
 }

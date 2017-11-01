@@ -1,6 +1,10 @@
 package compression
 
-import "bufio"
+import (
+	"io"
+
+	"github.com/pkg/errors"
+)
 
 type decompressedState int
 
@@ -10,30 +14,31 @@ const (
 )
 
 type Reader struct {
-	bs                           *BitStream
-	buffer                       CyclicBuffer // cyclic buffer which holds recent 520 bytes to be used while decompressing incrementally
-	state                        decompressedState
-	bytesToTakeFromBufferCounter uint32
-	offsetInBuffer               uint32
+	Bs                       *BitStream
+	buffer                   CyclicBuffer // cyclic buffer which holds recent 520 bytes to be used while decompressing incrementally
+	state                    decompressedState
+	numBytesToTakeFromBuffer uint
+	offsetInBuffer           uint
 }
 
-func NewReader(wrapped *bufio.Reader) *Reader {
+func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		bs:     NewBitStream(wrapped),
+		Bs:     NewBitStream(r),
 		buffer: NewCyclicBuffer(520),
 		state:  dsReadFromStream,
-		bytesToTakeFromBufferCounter: 0,
-		offsetInBuffer:               0,
 	}
 }
 
-//Read len(b) decompressed bytes from LZSS stream
 func (d *Reader) Read(b []byte) (num int, err error) {
 	c := len(b)
 	for ; num < c; num++ {
 		bt, err := d.DecompressByte()
 		if err != nil {
-			return 0, err
+			if err == io.EOF {
+				return num, err
+			} else {
+				return 0, err
+			}
 		}
 		b[num] = bt
 	}
@@ -42,12 +47,10 @@ func (d *Reader) Read(b []byte) (num int, err error) {
 
 func (d *Reader) DecompressByte() (b byte, e error) {
 	switch d.state {
-
-	//read from stream
 	case dsReadFromStream:
 
 		// read LZSS codeword flag (1 bit)
-		isInBuffer, err := d.bs.ReadBit()
+		isInBuffer, err := d.Bs.ReadOneBit()
 		if err != nil {
 			return 0, err
 		}
@@ -58,41 +61,41 @@ func (d *Reader) DecompressByte() (b byte, e error) {
 
 			// first of all lets decode position in buffer relative to end and
 			// number of bytes to copy
-			shift, err := d.bs.ReadBits(3)
+			shift, err := d.Bs.ReadBits(3)
 			if err != nil {
 				return 0, err
 			}
 
 			shift++
 
-			baseIndex, err := d.bs.ReadBits(shift)
+			baseIndex, err := d.Bs.ReadBits(shift)
 			if err != nil {
 				return 0, err
 			}
 			baseIndex += ((1 << uint8(shift)) - 2)
 
 			shift = 2
-			var decompressBlockSize uint32 = 2
+			var numBytes uint32 = 2
 
 			for {
-				partial, err := d.bs.ReadBits(shift)
+				partial, err := d.Bs.ReadBits(shift)
 				if err != nil {
 					return 0, err
 				}
-				decompressBlockSize += partial
+				numBytes += partial
 				if partial != (1<<uint8(shift))-1 {
 					break
 				}
 				shift += 1
 			}
 
-			d.bytesToTakeFromBufferCounter = decompressBlockSize
-			d.offsetInBuffer = baseIndex + 1
+			d.numBytesToTakeFromBuffer = uint(numBytes)
+			d.offsetInBuffer = uint(baseIndex) + 1
 			d.state = dsCopyFromBuffer
 			return d.DecompressByte()
 		} else {
 			//read byte in normal way
-			b, err := d.bs.ReadBits(8)
+			b, err := d.Bs.ReadBits(8)
 			if err != nil {
 				return 0, err
 			}
@@ -100,24 +103,18 @@ func (d *Reader) DecompressByte() (b byte, e error) {
 			d.buffer.WriteFront(byte(b))
 			return byte(b), nil
 		}
-
-	//read from cyclic buffer
 	case dsCopyFromBuffer:
-		indexInBuffer := substractModulo(int(d.buffer.startIndex), int(d.offsetInBuffer), 520)
-
-		b = d.buffer.buffer[indexInBuffer]
+		b, err := d.buffer.GetFromOffset(d.offsetInBuffer)
+		if err != nil {
+			return 0, errors.Wrap(err, "Error while reading data from LZSS window buffer")
+		}
+		//fmt.Printf("buffer:\n%s, offset %d, res: %x\n", d.buffer.String(), d.offsetInBuffer, b)
 		d.buffer.WriteFront(b)
-		d.bytesToTakeFromBufferCounter -= 1
-		if d.bytesToTakeFromBufferCounter == 0 {
+		d.numBytesToTakeFromBuffer--
+		if d.numBytesToTakeFromBuffer == 0 {
 			d.state = dsReadFromStream
 		}
+		return byte(b), nil
 	}
-	return
-}
-
-func substractModulo(a int, b int, modulus int) (y int) {
-	first := a % modulus
-	second := b % modulus
-	y = (first - second + modulus) % modulus
 	return
 }

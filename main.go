@@ -1,34 +1,19 @@
 package main
 
 import (
-	"bufio"
 	"encoding/binary"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/rzaluska/pr2/savegame"
-	"github.com/rzaluska/pr2/savegame/compression"
+	"io"
 	"log"
 	"os"
-	"runtime/pprof"
+
+	"github.com/rzaluska/pr2/savegame/compression"
 )
 
-var cpuprofile = flag.String("cp", "", "write cpu profile `file`")
-var filename = flag.String("fn", "", "compressed file name")
-
 func main() {
+	filename := flag.String("fn", "", "compressed file name")
 	flag.Parse()
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
-		}
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	f, err := os.Open(*filename)
 	if err != nil {
 		fmt.Printf("Error opening file %s: %s\n", os.Args[1], err)
@@ -36,14 +21,13 @@ func main() {
 	}
 	defer f.Close()
 
-	bufferedReader := bufio.NewReader(f)
 	sizeBytes := make([]byte, 4)
-	bufferedReader.Read(sizeBytes)
+	f.Read(sizeBytes)
 	_ = int64(binary.LittleEndian.Uint32(sizeBytes))
 
-	stream := compression.NewReader(bufferedReader)
-	h := savegame.ReadHeader(stream)
-	j, _ := json.MarshalIndent(h, "", "    ")
-	fmt.Println(string(j))
-
+	stream := compression.NewReader(f)
+	_, err = io.Copy(os.Stdout, stream)
+	if err != nil {
+		log.Println(err)
+	}
 }
