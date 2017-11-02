@@ -1,4 +1,4 @@
-package compression
+package lzss
 
 import (
 	"encoding/hex"
@@ -25,7 +25,7 @@ func NewCyclicBuffer(size uint) CyclicBuffer {
 
 func (b *CyclicBuffer) WriteFront(val byte) {
 	b.buffer[b.startIndex] = val
-	b.startIndex += 1
+	b.startIndex++
 	b.startIndex %= b.size
 
 	if b.startIndex == b.endIndex {
@@ -40,7 +40,7 @@ func (b *CyclicBuffer) ReadBack() (r byte, err error) {
 		return 0, CyclicBufferOverflowError
 	}
 	r = b.buffer[b.endIndex]
-	b.endIndex += 1
+	b.endIndex++
 	b.endIndex %= b.size
 	b.numElements--
 	return

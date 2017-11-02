@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -21,13 +20,12 @@ func main() {
 	}
 	defer f.Close()
 
-	sizeBytes := make([]byte, 4)
-	f.Read(sizeBytes)
-	_ = int64(binary.LittleEndian.Uint32(sizeBytes))
-
-	stream := compression.NewReader(f)
+	stream, err := compression.NewReader(f)
+	if err != nil {
+		log.Fatalf("Error while reading save file: %s", err)
+	}
 	_, err = io.Copy(os.Stdout, stream)
 	if err != nil {
-		log.Println(err)
+		log.Printf("Error while reading save file: %s\n", err)
 	}
 }

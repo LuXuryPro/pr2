@@ -1,4 +1,4 @@
-package compression
+package lzss
 
 import (
 	"io"
@@ -6,50 +6,51 @@ import (
 	"github.com/pkg/errors"
 )
 
-const dictionarySize = 520 // Retrived in process of reverse engineering the game
+const dictionarySize = 510 // Constant retrived in process of reverse engineering the game
 
-type decompressedState int
+type decompressionState int
 
 const (
-	dsReadFromStream decompressedState = iota
-	dsCopyFromBuffer
+	readFromStream decompressionState = iota
+	copyFromBuffer
 )
 
+// Reader reads compressed file and produces raw bytes
 type Reader struct {
 	bs                       *BitStream
 	buffer                   CyclicBuffer
-	state                    decompressedState
+	state                    decompressionState
 	numBytesToTakeFromBuffer uint
 	offsetInBuffer           uint
 }
 
+// Wraps r with decompression Reader and creates its new instance
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
 		bs:     NewBitStream(r),
 		buffer: NewCyclicBuffer(dictionarySize),
-		state:  dsReadFromStream,
+		state:  readFromStream,
 	}
 }
 
 func (d *Reader) Read(b []byte) (num int, err error) {
 	c := len(b)
 	for ; num < c; num++ {
-		bt, err := d.decompressByte()
+		bt, err := d.decompressSingleByte()
 		if err != nil {
 			if err == io.EOF {
 				return num, err
-			} else {
-				return 0, err
 			}
+			return 0, err
 		}
 		b[num] = bt
 	}
 	return
 }
 
-func (d *Reader) decompressByte() (b byte, e error) {
+func (d *Reader) decompressSingleByte() (b byte, e error) {
 	switch d.state {
-	case dsReadFromStream:
+	case readFromStream:
 
 		// read LZSS codeword flag (1 bit)
 		isInBuffer, err := d.bs.ReadOneBit()
@@ -88,33 +89,31 @@ func (d *Reader) decompressByte() (b byte, e error) {
 				if partial != (1<<uint8(shift))-1 {
 					break
 				}
-				shift += 1
+				shift++
 			}
 
 			d.numBytesToTakeFromBuffer = uint(numBytes)
 			d.offsetInBuffer = uint(baseIndex) + 1
-			d.state = dsCopyFromBuffer
-			return d.decompressByte()
-		} else {
-			//read byte in normal way
-			b, err := d.bs.ReadBits(8)
-			if err != nil {
-				return 0, err
-			}
-			// add it to cyclic buffer
-			d.buffer.WriteFront(byte(b))
-			return byte(b), nil
+			d.state = copyFromBuffer
+			return d.decompressSingleByte()
 		}
-	case dsCopyFromBuffer:
+		//read byte in normal way
+		b, err := d.bs.ReadBits(8)
+		if err != nil {
+			return 0, err
+		}
+		// add it to cyclic buffer
+		d.buffer.WriteFront(byte(b))
+		return byte(b), nil
+	case copyFromBuffer:
 		b, err := d.buffer.GetFromOffset(d.offsetInBuffer)
 		if err != nil {
 			return 0, errors.Wrap(err, "Error while reading data from LZSS window buffer")
 		}
-		//fmt.Printf("buffer:\n%s, offset %d, res: %x\n", d.buffer.String(), d.offsetInBuffer, b)
 		d.buffer.WriteFront(b)
 		d.numBytesToTakeFromBuffer--
 		if d.numBytesToTakeFromBuffer == 0 {
-			d.state = dsReadFromStream
+			d.state = readFromStream
 		}
 		return byte(b), nil
 	}

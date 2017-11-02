@@ -1,4 +1,4 @@
-package compression
+package lzss
 
 import (
 	"encoding/binary"
