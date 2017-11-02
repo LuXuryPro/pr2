@@ -1,12 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"log"
 	"os"
 
+	"github.com/rzaluska/pr2/savegame"
 	"github.com/rzaluska/pr2/savegame/compression"
 )
 
@@ -20,12 +20,8 @@ func main() {
 	}
 	defer f.Close()
 
-	stream, err := compression.NewReader(f)
-	if err != nil {
-		log.Fatalf("Error while reading save file: %s", err)
-	}
-	_, err = io.Copy(os.Stdout, stream)
-	if err != nil {
-		log.Printf("Error while reading save file: %s\n", err)
-	}
+	stream, _ := compression.NewReader(f)
+	s, _ := savegame.Read(stream)
+	j, _ := json.MarshalIndent(s, "", "\t")
+	fmt.Printf("%s\n", j)
 }
