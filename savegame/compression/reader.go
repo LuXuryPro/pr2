@@ -5,7 +5,7 @@ import (
 	"io"
 
 	"github.com/pkg/errors"
-	"github.com/zaluska/pr2/savegame/compression/lzss"
+	"github.com/rzaluska/pr2/savegame/compression/lzss"
 )
 
 // Reader reads compressed file and provides uncompressed stream
