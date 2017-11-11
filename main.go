@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rzaluska/pr2/savegame"
-	"github.com/rzaluska/pr2/savegame/compression"
+	"github.com/fxor/savegame"
+	"github.com/fxor/savegame/compression"
 )
 
 func main() {

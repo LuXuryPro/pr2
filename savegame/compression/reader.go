@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"io"
 
+	"github.com/fxor/pr2/savegame/compression/lzss"
 	"github.com/pkg/errors"
-	"github.com/rzaluska/pr2/savegame/compression/lzss"
 )
 
 // Reader reads compressed file and provides uncompressed stream
